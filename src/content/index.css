@@ -1,0 +1,295 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Logic Lens 悬浮图标样式 - 小圆点设计 */
+.logic-lens-indicator {
+  width: 8px;
+  height: 8px;
+  background: #f59e0b;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.4);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: auto;
+  cursor: pointer;
+  position: relative;
+  animation: logicLensIndicatorPulse 2s ease-in-out infinite;
+}
+
+.logic-lens-indicator:hover {
+  width: 10px;
+  height: 10px;
+  background: #d97706;
+  box-shadow: 0 3px 8px rgba(245, 158, 11, 0.6);
+  transform: scale(1.2);
+}
+
+.logic-lens-indicator:active {
+  transform: scale(1.05);
+}
+
+/* 脉冲动画，让圆点更明显 */
+@keyframes logicLensIndicatorPulse {
+  0%, 100% {
+    box-shadow: 0 2px 4px rgba(245, 158, 11, 0.4);
+  }
+  50% {
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.6);
+  }
+}
+
+/* 添加一个外圈，让点更明显 */
+.logic-lens-indicator::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(245, 158, 11, 0.15);
+  transition: all 0.25s ease;
+  pointer-events: none;
+}
+
+.logic-lens-indicator:hover::before {
+  width: 18px;
+  height: 18px;
+  background: rgba(245, 158, 11, 0.25);
+}
+
+/* Logic Lens 悬浮弹窗样式 */
+.logic-lens-popup {
+  min-width: 300px;
+  max-width: 400px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+  animation: logicLensPopupFadeIn 0.2s ease;
+}
+
+@keyframes logicLensPopupFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.logic-lens-popup-content {
+  padding: 0;
+}
+
+.logic-lens-popup-header {
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.95), rgba(250, 250, 250, 0.95));
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 12px 12px 0 0;
+}
+
+.logic-lens-popup-header:active {
+  cursor: grabbing;
+}
+
+.logic-lens-popup-header:hover {
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 1), rgba(248, 248, 248, 1));
+}
+
+.logic-lens-popup-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f59e0b;
+  letter-spacing: 0.3px;
+}
+
+.logic-lens-popup-label-translation {
+  font-size: 11px;
+  font-weight: 400;
+  color: #999;
+  margin-left: 4px;
+  opacity: 0.8;
+}
+
+.logic-lens-popup-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  color: #999;
+  padding: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  opacity: 0.6;
+}
+
+.logic-lens-popup-close:hover {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+  opacity: 1;
+}
+
+.logic-lens-popup-close:active {
+  transform: scale(0.9);
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.logic-lens-popup-text {
+  padding: 12px 16px; /* 减少内边距 */
+  color: #333;
+  font-size: 15px;
+  line-height: 1.5;
+  word-break: break-word;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.logic-lens-popup-context-meaning {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #777;
+  font-style: italic;
+  padding: 4px 8px;
+  background-color: rgba(0, 0, 0, 0.02);
+  border-radius: 4px;
+  border-left: 3px solid #f59e0b;
+}
+
+.logic-lens-popup-word-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logic-lens-popup-phonetic {
+  color: #666;
+  font-size: 14px;
+  font-style: italic;
+  font-family: 'Times New Roman', serif;
+}
+
+.logic-lens-popup-pronounce-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 13px;
+  color: #666;
+  transition: all 0.15s ease;
+  opacity: 0.6;
+}
+
+.logic-lens-popup-pronounce-btn:hover {
+  opacity: 0.9;
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.logic-lens-popup-pronounce-btn:active {
+  opacity: 0.7;
+  transform: scale(0.98);
+}
+
+.logic-lens-popup-loading {
+  padding: 24px 16px;
+  text-align: center;
+  color: #666;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.logic-lens-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(245, 158, 11, 0.2);
+  border-top-color: #f59e0b;
+  border-radius: 50%;
+  animation: logicLensSpin 0.8s linear infinite;
+}
+
+@keyframes logicLensSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.logic-lens-popup-result {
+  padding: 0;
+}
+
+.logic-lens-popup-section {
+  padding: 12px 16px; /* 减少上下内边距 */
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.logic-lens-popup-section:last-child {
+  border-bottom: none;
+}
+
+.logic-lens-popup-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f59e0b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px; /* 减少标题和内容之间的间距 */
+}
+
+.logic-lens-popup-section-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #333;
+  word-break: break-word;
+  white-space: pre-wrap; /* 保留换行和空格 */
+}
+
+/* 核心逻辑部分的英文原文样式 */
+.logic-lens-popup-section-content .english-definition {
+  font-style: italic;
+  color: #555;
+  margin-bottom: 10px; /* 英文和中文之间的间距 */
+  line-height: 1.2; /* 减少行高 */
+}
+
+/* 核心逻辑部分的中文翻译样式 */
+.logic-lens-popup-section-content .chinese-translation {
+  color: #333;
+  font-weight: 500;
+  line-height: 1.2; /* 减少行高 */
+  line-height: 1.2; /* 减少行高 */
+}
+
+/* 弹窗箭头（可选，指向选中文本） */
+.logic-lens-popup::before {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 8px solid transparent;
+  border-right-color: rgba(255, 255, 255, 0.98);
+  left: -16px;
+  top: 20px;
+}
+
