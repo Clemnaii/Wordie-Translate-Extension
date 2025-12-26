@@ -24,15 +24,14 @@ let dragEventCleanup: (() => void) | null = null
 function calculateTextPosition(range: Range): { x: number; y: number; width: number; height: number } {
   const rect = range.getBoundingClientRect()
 
-  // 检查是否在输入框内
+  // 检查是否在输入框内（预留功能）
   const startContainer = range.startContainer
-  let inputElement: HTMLInputElement | HTMLTextAreaElement | null = null
 
   if (startContainer.nodeType === Node.TEXT_NODE) {
     let parent = startContainer.parentElement
     while (parent) {
       if (parent.tagName === 'INPUT' || parent.tagName === 'TEXTAREA') {
-        inputElement = parent as HTMLInputElement | HTMLTextAreaElement
+        // inputElement = parent as HTMLInputElement | HTMLTextAreaElement
         break
       }
       parent = parent.parentElement
@@ -317,7 +316,7 @@ function showPopup(text: string, position: { x: number; y: number; width: number
   })
 
   // 拖拽功能
-  setupDragHandling(popup, popupX, popupY)
+  setupDragHandling(popup)
 
   // 阻止弹窗内点击事件冒泡
   popup.addEventListener('click', (e) => {
@@ -341,7 +340,7 @@ function showPopup(text: string, position: { x: number; y: number; width: number
 /**
  * 设置弹窗拖拽功能
  */
-function setupDragHandling(popup: HTMLElement, initialX: number, initialY: number) {
+function setupDragHandling(popup: HTMLElement) {
   const dragHandle = popup.querySelector('#popup-drag-handle') as HTMLElement
 
   dragHandle.addEventListener('mousedown', (e) => {
@@ -899,7 +898,7 @@ function init() {
   })
 
 // 监听来自background script的消息（右键菜单翻译）
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === "translateSelection" && request.text) {
     handleContextMenuTranslation(request.text)
     sendResponse({ success: true })

@@ -20,7 +20,7 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   console.log("🖱️ Wordie: 右键菜单被点击", { menuItemId: info.menuItemId, selectionText: info.selectionText });
 
-  if (info.menuItemId === "wordie-translate" && info.selectionText) {
+  if (info.menuItemId === "wordie-translate" && info.selectionText && tab?.id) {
     console.log("📤 Wordie: 发送翻译请求到content script", { tabId: tab.id, text: info.selectionText });
 
     // 将选中的文本和页面URL发送到content script
