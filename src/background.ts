@@ -2,25 +2,51 @@
 
 // 创建右键菜单
 chrome.runtime.onInstalled.addListener(() => {
-  console.log("🔧 Wordie: 正在创建右键菜单...");
-  chrome.contextMenus.create({
-    id: "wordie-translate",
-    title: "Wordie 翻译",
-    contexts: ["selection"]
-  }, () => {
+  console.log("🔧 Wordie [Background]: onInstalled event triggered");
+  
+  // 清除旧菜单（防止重复）
+  chrome.contextMenus.removeAll(() => {
     if (chrome.runtime.lastError) {
-      console.error("❌ Wordie: 创建右键菜单失败:", chrome.runtime.lastError);
+      console.error("❌ Wordie [Background]: Error removing menus:", chrome.runtime.lastError);
     } else {
-      console.log("✅ Wordie: 右键菜单创建成功");
+      console.log("✅ Wordie [Background]: Old menus removed");
     }
+
+    // 划词翻译
+    chrome.contextMenus.create({
+      id: "wordie-translate",
+      title: "Wordie 划词翻译",
+      contexts: ["selection"]
+    }, () => {
+      if (chrome.runtime.lastError) {
+         console.error("❌ Wordie [Background]: Failed to create selection menu:", chrome.runtime.lastError);
+      } else {
+         console.log("✅ Wordie [Background]: Selection menu created");
+      }
+    });
+
+    // 页面翻译
+    chrome.contextMenus.create({
+      id: "wordie-page-translate",
+      title: "Wordie 页面翻译 (开启/关闭)",
+      contexts: ["all"]
+    }, () => {
+      if (chrome.runtime.lastError) {
+        console.error("❌ Wordie [Background]: Failed to create page translate menu:", chrome.runtime.lastError);
+      } else {
+        console.log("✅ Wordie [Background]: Page translate menu created (context: all)");
+      }
+    });
   });
 });
 
 // 处理右键菜单点击
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  console.log("🖱️ Wordie: 右键菜单被点击", { menuItemId: info.menuItemId, selectionText: info.selectionText });
+  console.log("🖱️ Wordie: 右键菜单被点击", { menuItemId: info.menuItemId });
 
-  if (info.menuItemId === "wordie-translate" && info.selectionText && tab?.id) {
+  if (!tab?.id) return;
+
+  if (info.menuItemId === "wordie-translate" && info.selectionText) {
     console.log("📤 Wordie: 发送翻译请求到content script", { tabId: tab.id, text: info.selectionText });
 
     // 将选中的文本和页面URL发送到content script
@@ -28,12 +54,17 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
       action: "translateSelection",
       text: info.selectionText,
       pageUrl: info.pageUrl
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error("❌ Wordie: 发送消息失败:", chrome.runtime.lastError);
-      } else {
-        console.log("✅ Wordie: 消息发送成功", response);
-      }
+    }).catch(err => {
+      console.error("❌ Wordie: 发送消息失败:", err);
+    });
+  } else if (info.menuItemId === "wordie-page-translate") {
+    console.log("📤 Wordie: 发送页面翻译请求到content script", { tabId: tab.id });
+    
+    // 切换页面翻译状态
+    chrome.tabs.sendMessage(tab.id, {
+      action: "togglePageTranslation"
+    }).catch(err => {
+      console.error("❌ Wordie: 发送消息失败:", err);
     });
   }
 });

@@ -100,6 +100,23 @@
   border-radius: 12px 12px 0 0;
 }
 
+/* 页面翻译样式 */
+.wordie-translation {
+  color: #888 !important;
+  font-size: 0.85em !important;
+  margin-left: 0.5em !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+  opacity: 0.9 !important;
+  pointer-events: none !important; /* 交互透明 */
+  display: inline !important; /* 保持行内显示 */
+  font-weight: normal !important;
+  background: transparent !important;
+  text-shadow: none !important;
+  vertical-align: baseline !important;
+  line-height: normal !important;
+}
+
+
 .logic-lens-popup-header:active {
   cursor: grabbing;
 }

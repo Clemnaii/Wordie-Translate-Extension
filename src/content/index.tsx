@@ -1,8 +1,12 @@
 import './index.css'
 import { API_CONFIG, AIResponse } from '../config/api'
+import { PageTranslator } from './pageTranslator'
 
 // ==================== 全局状态管理 ====================
+const pageTranslator = new PageTranslator()
+
 interface SelectionInfo {
+
   text: string
   position: { x: number; y: number; width: number; height: number }
   context: string
@@ -896,15 +900,26 @@ function init() {
       }
     }, 200)
   })
+}
 
 // 监听来自background script的消息（右键菜单翻译）
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+  console.log("📨 Wordie [Content]: Received message:", request.action);
+  
   if (request.action === "translateSelection" && request.text) {
     handleContextMenuTranslation(request.text)
     sendResponse({ success: true })
+  } else if (request.action === "togglePageTranslation") {
+    const isEnabled = pageTranslator.toggle()
+    console.log("🔄 Wordie [Content]: Toggled page translation to:", isEnabled);
+    sendResponse({ success: true, isEnabled })
+  } else if (request.action === "getPageTranslationStatus") {
+    const isEnabled = pageTranslator.isPageTranslationEnabled()
+    console.log("ℹ️ Wordie [Content]: Reporting page translation status:", isEnabled);
+    sendResponse({ success: true, isEnabled })
   }
 })
-}
+
 
 // 确保脚本在页面加载完成后运行
 if (document.readyState === 'loading') {
