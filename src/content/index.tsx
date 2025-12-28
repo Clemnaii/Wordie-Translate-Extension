@@ -4,6 +4,14 @@ import { PageTranslator } from './pageTranslator'
 
 // ==================== 全局状态管理 ====================
 const pageTranslator = new PageTranslator()
+let isSelectionTranslateEnabled = true
+
+// 初始化时读取划词翻译开关状态
+chrome.storage.local.get(['isSelectionTranslateEnabled'], (result) => {
+  if (result.isSelectionTranslateEnabled !== undefined) {
+    isSelectionTranslateEnabled = result.isSelectionTranslateEnabled
+  }
+})
 
 interface SelectionInfo {
 
@@ -245,8 +253,8 @@ function showIndicator(text: string, position: { x: number; y: number; width: nu
   indicator.style.cursor = 'pointer'
   indicator.style.pointerEvents = 'auto'
 
-  // 点击事件：显示弹窗
-  indicator.addEventListener('click', (e) => {
+  // 鼠标移入事件：显示弹窗
+  indicator.addEventListener('mouseenter', (e) => {
     e.stopPropagation()
     if (currentSelection) {
       removeIndicator()
@@ -806,6 +814,11 @@ function handleTextSelection() {
     return
   }
 
+  // 如果划词翻译已禁用，则不显示小圆点
+  if (!isSelectionTranslateEnabled) {
+    return
+  }
+
   const range = selection.getRangeAt(0)
   const container = range.commonAncestorContainer
   const context = container.textContent || ''
@@ -917,6 +930,13 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     const isEnabled = pageTranslator.isPageTranslationEnabled()
     console.log("ℹ️ Wordie [Content]: Reporting page translation status:", isEnabled);
     sendResponse({ success: true, isEnabled })
+  } else if (request.action === "updateSelectionTranslateStatus") {
+    isSelectionTranslateEnabled = request.isEnabled
+    console.log("🔄 Wordie [Content]: Updated selection translate status to:", isSelectionTranslateEnabled);
+    if (!isSelectionTranslateEnabled) {
+      removeIndicator()
+    }
+    sendResponse({ success: true })
   }
 })
 

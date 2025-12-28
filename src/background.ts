@@ -24,19 +24,6 @@ chrome.runtime.onInstalled.addListener(() => {
          console.log("✅ Wordie [Background]: Selection menu created");
       }
     });
-
-    // 页面翻译
-    chrome.contextMenus.create({
-      id: "wordie-page-translate",
-      title: "Wordie 页面翻译 (开启/关闭)",
-      contexts: ["all"]
-    }, () => {
-      if (chrome.runtime.lastError) {
-        console.error("❌ Wordie [Background]: Failed to create page translate menu:", chrome.runtime.lastError);
-      } else {
-        console.log("✅ Wordie [Background]: Page translate menu created (context: all)");
-      }
-    });
   });
 });
 
@@ -54,15 +41,6 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
       action: "translateSelection",
       text: info.selectionText,
       pageUrl: info.pageUrl
-    }).catch(err => {
-      console.error("❌ Wordie: 发送消息失败:", err);
-    });
-  } else if (info.menuItemId === "wordie-page-translate") {
-    console.log("📤 Wordie: 发送页面翻译请求到content script", { tabId: tab.id });
-    
-    // 切换页面翻译状态
-    chrome.tabs.sendMessage(tab.id, {
-      action: "togglePageTranslation"
     }).catch(err => {
       console.error("❌ Wordie: 发送消息失败:", err);
     });

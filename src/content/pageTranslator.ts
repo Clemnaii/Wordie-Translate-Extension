@@ -11,6 +11,20 @@ export class PageTranslator {
   private isEnabled = false
 
   constructor() {
+    // 恢复之前的状态
+    chrome.storage.local.get(['isPageTranslateEnabled'], (result) => {
+      if (result.isPageTranslateEnabled) {
+        console.log('📖 Wordie: 恢复页面翻译状态: 开启')
+        this.isEnabled = true
+        // 确保DOM加载完成后再扫描
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', () => this.scanPage())
+        } else {
+          this.scanPage()
+        }
+      }
+    })
+
     // 使用 IntersectionObserver 监听元素是否进入视口
     this.observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
@@ -31,6 +45,10 @@ export class PageTranslator {
    */
   public toggle() {
     this.isEnabled = !this.isEnabled
+    
+    // 保存状态到 storage
+    chrome.storage.local.set({ isPageTranslateEnabled: this.isEnabled })
+
     if (this.isEnabled) {
       console.log('📖 Wordie: 页面翻译已开启')
       this.scanPage()
