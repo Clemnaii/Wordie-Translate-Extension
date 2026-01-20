@@ -30,7 +30,7 @@
     "default_title": "Wordie"
   },
   "background": {
-    "service_worker": "src/background.js"
+    "service_worker": "src/background.ts"
   },
   "web_accessible_resources": [
     {

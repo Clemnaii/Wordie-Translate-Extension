@@ -1,44 +1,35 @@
-// API 配置
+import { ApiType } from '../types';
+
 // API Key 现在从环境变量中读取，请在 .env 文件中配置
 
 export const API_CONFIG = {
-  // Gemini API 配置
-  // 根据官方文档：https://ai.google.dev/gemini-api/docs/api-key
-  GEMINI_API_KEY: import.meta.env.VITE_GEMINI_API_KEY || '', // 从环境变量读取
-
-  // 对应 Gemini 2.5 Flash 的 REST 接口地址
+  // Gemini API
+  GEMINI_API_KEY: import.meta.env.VITE_GEMINI_API_KEY || '',
   GEMINI_API_URL: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
 
-  // 或者使用 OpenAI API
-  OPENAI_API_KEY: import.meta.env.VITE_OPENAI_API_KEY || '', // 从环境变量读取
+  // OpenAI API
+  OPENAI_API_KEY: import.meta.env.VITE_OPENAI_API_KEY || '',
   OPENAI_API_URL: 'https://api.openai.com/v1/chat/completions',
 
-  // DeepSeek API 配置
-  DEEPSEEK_API_KEY: import.meta.env.VITE_DEEPSEEK_API_KEY || '', // 从环境变量读取
+  // DeepSeek API
+  DEEPSEEK_API_KEY: import.meta.env.VITE_DEEPSEEK_API_KEY || '',
   DEEPSEEK_API_BASE: 'https://api.deepseek.com/v1',
   DEEPSEEK_MODEL: 'deepseek-chat',
   get DEEPSEEK_API_URL() {
-    return `${this.DEEPSEEK_API_BASE}/chat/completions`
+    return `${this.DEEPSEEK_API_BASE}/chat/completions`;
   },
 
-  // 阿里云通义千问 API 配置
-  ALIBABA_API_KEY: import.meta.env.VITE_ALIBABA_API_KEY || '', // 从环境变量读取
+  // Alibaba Qwen API
+  ALIBABA_API_KEY: import.meta.env.VITE_ALIBABA_API_KEY || '',
   ALIBABA_API_BASE: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
   ALIBABA_MODEL: 'qwen-flash',
   get ALIBABA_API_URL() {
-    return `${this.ALIBABA_API_BASE}/chat/completions`
+    return `${this.ALIBABA_API_BASE}/chat/completions`;
   },
 
-  // 当前使用的 API 类型：'gemini' | 'openai' | 'deepseek' | 'alibaba' | 'custom'
-  API_TYPE: (import.meta.env.VITE_API_TYPE as 'gemini' | 'openai' | 'deepseek' | 'alibaba' | 'custom') || 'alibaba',
-}
+  // Current API Type
+  API_TYPE: (import.meta.env.VITE_API_TYPE as ApiType) || 'alibaba',
+};
 
-// AI 响应类型
-export interface AIResponse {
-  translation: string // 中文直译
-  coreLogic: string | null // 底层逻辑解释（词语/短语时才有，完整句子时为 null）
-  correctedText?: string // AI 修正后的完整正确文本（可选）
-  phonetic?: string // 单词音标（仅词语/短语时有，可选）
-  contextMeaning?: string // 上下文中的意思解释（可选）
-}
-
+// Re-export types for backward compatibility if needed, but better to import from types
+export type { AIResponse } from '../types';
