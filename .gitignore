@@ -51,3 +51,5 @@ coverage/
 *.bak
 *.backup
 futureTasks.md
+.vercel
+.env*.local

@@ -29,6 +29,11 @@ export const API_CONFIG = {
 
   // Current API Type
   API_TYPE: (import.meta.env.VITE_API_TYPE as ApiType) || 'alibaba',
+
+  // Backend Proxy URL (优先使用环境变量，否则默认为本地测试地址)
+  // 使用 127.0.0.1 替代 localhost 以避免 DNS 解析延迟
+  // API_PROXY_URL: import.meta.env.VITE_API_PROXY_URL || 'http://127.0.0.1:3000/api/translate',
+  API_PROXY_URL: import.meta.env.VITE_API_PROXY_URL || 'https://wordie-translate-extension-git-feature-e3fbdb-clemnas-projects.vercel.app/api/translate',
 };
 
 // Re-export types for backward compatibility if needed, but better to import from types
