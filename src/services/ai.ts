@@ -1,4 +1,6 @@
 import { API_CONFIG, AIResponse } from '../config/api';
+import { storage, ApiProvider } from '../utils/storage';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export interface AIAnalysisResult extends AIResponse {
   // 扩展接口以备将来需要
@@ -111,17 +113,125 @@ class AIService {
     let accumulatedText = '';
 
     try {
-      await this.callProxyStream(text, context, API_TYPE, (chunk) => {
-        accumulatedText += chunk;
-        
-        // 尝试解析部分结果
-        const partialResult = this.parsePartialResponse(accumulatedText, text);
-        onUpdate(partialResult);
-      });
+      // Check settings for custom key
+      const settings = await storage.get();
+      
+      if (settings.useCustomKey && settings.customKeys[settings.provider]) {
+        // Use direct client-side call
+        await this.callDirectStream(
+          text, 
+          context, 
+          settings.provider, 
+          settings.customKeys[settings.provider]!, 
+          (chunk) => {
+            accumulatedText += chunk;
+            const partialResult = this.parsePartialResponse(accumulatedText, text);
+            onUpdate(partialResult);
+          }
+        );
+      } else {
+        // Use Proxy
+        await this.callProxyStream(text, context, API_TYPE, (chunk) => {
+          accumulatedText += chunk;
+          const partialResult = this.parsePartialResponse(accumulatedText, text);
+          onUpdate(partialResult);
+        });
+      }
     } catch (error) {
       console.error('AI Stream Analysis Failed:', error);
-      // Still return what we have? Or let the UI handle the error state via promise rejection?
-      // For now, just log.
+      throw error;
+    }
+  }
+
+  private async callDirectStream(
+    text: string, 
+    context: string, 
+    provider: ApiProvider, 
+    apiKey: string,
+    onChunk: (chunk: string) => void
+  ): Promise<void> {
+    const prompt = this.generatePrompt(text, context);
+
+    if (provider === 'gemini') {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const result = await model.generateContentStream(prompt);
+      
+      for await (const chunk of result.stream) {
+        const chunkText = chunk.text();
+        if (chunkText) onChunk(chunkText);
+      }
+    } else {
+      // OpenAI compatible providers (OpenAI, DeepSeek, Alibaba, etc.)
+      let url = '';
+      let modelName = '';
+      
+      switch (provider) {
+        case 'openai':
+          url = 'https://api.openai.com/v1/chat/completions';
+          modelName = 'gpt-3.5-turbo';
+          break;
+        case 'deepseek':
+          url = 'https://api.deepseek.com/chat/completions';
+          modelName = 'deepseek-chat';
+          break;
+        case 'alibaba':
+          url = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+          modelName = 'qwen-turbo';
+          break;
+        default:
+          throw new Error(`Unsupported provider for direct call: ${provider}`);
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: modelName,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.7,
+          stream: true
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`${provider} API Error: ${response.status} ${errText}`);
+      }
+
+      if (!response.body) throw new Error('No response body');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed === 'data: [DONE]') continue;
+          
+          if (trimmed.startsWith('data: ')) {
+            try {
+              const dataStr = trimmed.slice(6);
+              const data = JSON.parse(dataStr);
+              const content = data.choices?.[0]?.delta?.content;
+              if (content) onChunk(content);
+            } catch (e) {
+              console.warn('Direct Stream Parse Error', e);
+            }
+          }
+        }
+      }
     }
   }
 

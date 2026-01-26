@@ -42,11 +42,7 @@ export default async function handler(request: any, response: any) {
 
   // 3. 解析请求
   const { 
-    GEMINI_API_KEY, 
-    OPENAI_API_KEY, 
-    DEEPSEEK_API_KEY, 
     ALIBABA_API_KEY, 
-    DEFAULT_API_TYPE 
   } = process.env;
 
   const body = request.body || {};
@@ -59,7 +55,10 @@ export default async function handler(request: any, response: any) {
 
   const truncatedContext = context ? context.substring(0, 500) : '';
   const prompt = generatePrompt(text, truncatedContext);
-  const type = apiType || DEFAULT_API_TYPE || 'gemini';
+  
+  // 默认使用 Alibaba，如果传入了 apiType 且支持则使用传入的 (兼容旧逻辑或扩展)
+  // 但根据用户要求，目前主要支持 Alibaba
+  const type = apiType || 'alibaba';
 
   console.log(`[${new Date().toISOString()}] 🤖 Streaming via ${type}`);
 
@@ -67,20 +66,10 @@ export default async function handler(request: any, response: any) {
     let streamGenerator: AsyncGenerator<string>;
 
     switch (type) {
-      case 'gemini':
-        streamGenerator = streamGemini(prompt, GEMINI_API_KEY);
-        break;
-      case 'openai':
-        streamGenerator = streamOpenAICompatible(prompt, OPENAI_API_KEY, 'https://api.openai.com/v1/chat/completions', 'gpt-4o-mini');
-        break;
-      case 'deepseek':
-        streamGenerator = streamOpenAICompatible(prompt, DEEPSEEK_API_KEY, 'https://api.deepseek.com/v1/chat/completions', 'deepseek-chat');
-        break;
       case 'alibaba':
+      default: // 默认回退到 Alibaba
         streamGenerator = streamOpenAICompatible(prompt, ALIBABA_API_KEY, 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', 'qwen-flash');
         break;
-      default:
-        throw new Error('Unsupported API Type');
     }
 
     // 4. 执行流式传输

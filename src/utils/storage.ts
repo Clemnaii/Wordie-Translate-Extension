@@ -1,16 +1,29 @@
+export type ApiProvider = 'gemini' | 'openai' | 'deepseek' | 'alibaba';
+
 export interface Settings {
   enableTranslation: boolean;
+  provider: ApiProvider;
+  customKeys: {
+    [key in ApiProvider]?: string;
+  };
+  useCustomKey: boolean; // Global toggle: if true, try to use custom key for selected provider
 }
 
 export const defaultSettings: Settings = {
   enableTranslation: true,
+  provider: 'gemini', // Default to Gemini as it's usually free/fast
+  customKeys: {},
+  useCustomKey: false,
 };
 
 export const storage = {
   get: async (): Promise<Settings> => {
     return new Promise((resolve) => {
       chrome.storage.local.get(defaultSettings, (items) => {
-        resolve(items as Settings);
+        // Ensure nested objects are merged correctly
+        const merged = { ...defaultSettings, ...items };
+        merged.customKeys = { ...defaultSettings.customKeys, ...items.customKeys };
+        resolve(merged as Settings);
       });
     });
   },
@@ -27,8 +40,9 @@ export const storage = {
     const listener = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
       if (areaName === 'local') {
         const newSettings: Partial<Settings> = {};
-        if (changes.enableTranslation) {
-          newSettings.enableTranslation = changes.enableTranslation.newValue;
+        for (const [key, change] of Object.entries(changes)) {
+          // @ts-ignore
+          newSettings[key as keyof Settings] = change.newValue;
         }
         if (Object.keys(newSettings).length > 0) {
           callback(newSettings);
