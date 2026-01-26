@@ -93,24 +93,146 @@ class AIService {
   }
 
   public async analyzeText(text: string, context: string = ''): Promise<AIAnalysisResult | null> {
+    // Legacy method wrapper (waits for completion)
+    return new Promise((resolve) => {
+      let finalResult: AIAnalysisResult | null = null;
+      this.analyzeTextStream(text, context, (result) => {
+        finalResult = result as AIAnalysisResult;
+      }).then(() => resolve(finalResult));
+    });
+  }
+
+  public async analyzeTextStream(
+    text: string, 
+    context: string = '', 
+    onUpdate: (result: Partial<AIAnalysisResult>) => void
+  ): Promise<void> {
     const { API_TYPE } = API_CONFIG;
+    let accumulatedText = '';
 
     try {
-      // 使用后端代理调用 AI
-      const content = await this.callProxy(text, context, API_TYPE);
-      
-      if (!content) return null;
-      
-      return this.parseResponse(content, text);
+      await this.callProxyStream(text, context, API_TYPE, (chunk) => {
+        accumulatedText += chunk;
+        
+        // 尝试解析部分结果
+        const partialResult = this.parsePartialResponse(accumulatedText, text);
+        onUpdate(partialResult);
+      });
     } catch (error) {
-      console.error('AI Analysis Failed:', error);
-      return null;
+      console.error('AI Stream Analysis Failed:', error);
+      // Still return what we have? Or let the UI handle the error state via promise rejection?
+      // For now, just log.
     }
   }
 
-  private async callProxy(text: string, context: string, apiType: string): Promise<string> {
+  private parsePartialResponse(content: string, originalText: string): Partial<AIAnalysisResult> {
+    // 1. 尝试完整解析 (如果是合法的 JSON)
     try {
-      const t0_requestStart = Date.now();
+      // 查找第一个 { 和 最后一个 } 之间的内容
+      const firstBrace = content.indexOf('{');
+      const lastBrace = content.lastIndexOf('}');
+      
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        const jsonStr = content.substring(firstBrace, lastBrace + 1);
+        const result = JSON.parse(jsonStr);
+        return this.normalizeResult(result, originalText);
+      }
+    } catch (e) {
+      // JSON 不完整，忽略错误，继续下面的正则提取
+    }
+
+    // 2. 正则提取字段 (用于流式显示)
+    // 注意：这里的正则比较简单，处理不了复杂的嵌套或转义，但对于流式展示足够了
+    const extract = (key: string) => {
+      // 匹配 "key": "value... (直到遇到下一个引号或字符串结尾)
+      // 注意：这里假设 value 中没有未转义的引号。如果 AI 输出包含转义引号，这个正则可能会截断。
+      // 但为了简单起见，且通常 key 顺序固定，我们尽量匹配到下一个字段的 key 前
+      
+      // 更加鲁棒的策略：
+      // 找到 "key": 
+      // 然后找到其后的第一个 "
+      // 然后读取直到下一个 " (忽略 \")
+      
+      const keyPattern = `"${key}"\\s*:\\s*"`;
+      const keyMatch = content.match(new RegExp(keyPattern));
+      
+      if (!keyMatch || keyMatch.index === undefined) return undefined;
+      
+      const valueStartIndex = keyMatch.index + keyMatch[0].length;
+      let valueEndIndex = valueStartIndex;
+      let isEscaped = false;
+      
+      // 手动扫描字符串直到结束引号
+      for (let i = valueStartIndex; i < content.length; i++) {
+        const char = content[i];
+        if (isEscaped) {
+          isEscaped = false;
+          continue;
+        }
+        if (char === '\\') {
+          isEscaped = true;
+          continue;
+        }
+        if (char === '"') {
+          valueEndIndex = i;
+          break; // Found the end quote
+        }
+        // If we reach the end of content without a quote, it means the value is still streaming
+        if (i === content.length - 1) {
+          valueEndIndex = content.length;
+        }
+      }
+      
+      return content.substring(valueStartIndex, valueEndIndex);
+    };
+
+    return {
+      correctedText: extract('correctedText') || originalText,
+      phonetic: extract('phonetic'),
+      contextMeaning: extract('contextMeaning'),
+      translation: extract('translation'),
+      coreLogic: extract('coreLogic') // coreLogic 通常在最后，可能还未开始
+    };
+  }
+
+  private normalizeResult(result: any, originalText: string): AIAnalysisResult {
+    const coreLogic = result.coreLogic ?? result.core_logic ?? null;
+    const normalizedCoreLogic = (coreLogic === '' || coreLogic === 'null') ? null : coreLogic;
+    
+    return {
+      correctedText: result.correctedText || originalText,
+      phonetic: result.phonetic || undefined,
+      contextMeaning: result.contextMeaning || undefined,
+      translation: result.translation || '翻译获取失败',
+      coreLogic: normalizedCoreLogic
+    };
+  }
+
+  // Old parseResponse is deprecated but kept/refactored inside normalizeResult if needed
+  // private parseResponse... (Removed)
+
+  /**
+   * 预热连接 (Warm-up)
+   * 在功能开启或页面加载时调用，建立 TCP/TLS 连接池
+   */
+  public async preheat(): Promise<void> {
+    try {
+      // 发送一个轻量级的 GET 请求到后端
+      // 浏览器的连接池机制会自动复用这个连接用于后续的 POST 请求
+      await fetch(API_CONFIG.API_PROXY_URL, {
+        method: 'GET',
+        // 不发送 body，且通常不发送复杂 Header 以避免 Preflight (如果后端允许简单请求)
+        // 但这里我们的后端配置了 CORS，且是同源/代理，主要目的是建立连接
+      });
+      console.log('🔥 Connection preheated');
+    } catch (e) {
+      // 预热失败不影响主流程，仅记录日志
+      console.debug('Connection preheat failed (non-critical):', e);
+    }
+  }
+
+  private async callProxyStream(text: string, context: string, apiType: string, onChunk: (chunk: string) => void): Promise<void> {
+    try {
       const response = await fetch(API_CONFIG.API_PROXY_URL, {
         method: 'POST',
         headers: {
@@ -122,113 +244,55 @@ class AIService {
           apiType
         })
       });
-      const t5_requestEnd = Date.now();
-
-      // Performance Analysis Logging
-      const serverStart = parseInt(response.headers.get('X-Time-Server-Start') || '0');
-      const jsonParsed = parseInt(response.headers.get('X-Time-Json-Parsed') || '0');
-      const dispatchEnd = parseInt(response.headers.get('X-Time-Dispatch-End') || '0');
-      const aiStart = parseInt(response.headers.get('X-Time-AI-Start') || '0');
-      const aiEnd = parseInt(response.headers.get('X-Time-AI-End') || '0');
-      const serverEnd = parseInt(response.headers.get('X-Time-Server-End') || '0');
-
-      console.group('🚀 Translation Timeline Analysis (Timestamps)');
-      
-      const formatTime = (ts: number) => new Date(ts).toISOString().split('T')[1].replace('Z', '');
-
-      console.log(`[${formatTime(t0_requestStart)}] 1. Client Start Request`);
-      
-      if (serverStart > 0) {
-        console.log(`[${formatTime(serverStart)}] 2. Server Received Request`);
-        console.log(`[${formatTime(jsonParsed)}] 3. Server JSON Parsed`);
-        console.log(`[${formatTime(dispatchEnd)}] 4. Server Dispatch Ready`);
-        console.log(`[${formatTime(aiStart)}] 5. Server AI Call Start`);
-        console.log(`[${formatTime(aiEnd)}] 6. Server AI Call End`);
-        console.log(`[${formatTime(serverEnd)}] 7. Server Response Ready`);
-      } else {
-        console.log('  Server timing headers missing (CORS or old version)');
-      }
-      
-      console.log(`[${formatTime(t5_requestEnd)}] 8. Client Received Response`);
-      console.log(`Total Duration: ${t5_requestEnd - t0_requestStart}ms`);
-      console.groupEnd();
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`Proxy API Error: ${response.statusText} ${errorData.error ? `- ${errorData.error}` : ''}`);
+        // Try to read error body
+        const errorText = await response.text().catch(() => '');
+        throw new Error(`Proxy API Error: ${response.statusText} ${errorText}`);
       }
+      
+      if (!response.body) throw new Error('No response body');
 
-      const data = await response.json();
-      return data.content || '';
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; 
+        
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed === 'data: [DONE]') continue;
+          
+          if (trimmed.startsWith('data: ')) {
+            try {
+              // Server sends data: "chunk" (JSON stringified string)
+              // We need to JSON.parse the data payload to get the actual string
+              const dataStr = trimmed.slice(6);
+              if (dataStr === '[DONE]') return;
+              
+              const textChunk = JSON.parse(dataStr);
+              onChunk(textChunk);
+            } catch (e) {
+              console.warn('SSE Parse Error', e, trimmed);
+            }
+          } else if (trimmed.startsWith('event: error')) {
+             // Handle error event if needed, usually followed by data: error msg
+          }
+        }
+      }
     } catch (error) {
-      console.error('Call Proxy Failed:', error);
+      console.error('Call Proxy Stream Failed:', error);
       throw error;
     }
   }
 
-
-  private async callOpenAI(prompt: string): Promise<string> {
-    if (!API_CONFIG.OPENAI_API_KEY) throw new Error('OpenAI API Key missing');
-
-    const response = await fetch(API_CONFIG.OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_CONFIG.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7
-      })
-    });
-
-    if (!response.ok) throw new Error(`OpenAI API Error: ${response.statusText}`);
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || '';
-  }
-
-  private async callDeepSeek(prompt: string): Promise<string> {
-    if (!API_CONFIG.DEEPSEEK_API_KEY) throw new Error('DeepSeek API Key missing');
-
-    const response = await fetch(API_CONFIG.DEEPSEEK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_CONFIG.DEEPSEEK_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: API_CONFIG.DEEPSEEK_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7
-      })
-    });
-
-    if (!response.ok) throw new Error(`DeepSeek API Error: ${response.statusText}`);
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || '';
-  }
-
-  private async callAlibaba(prompt: string): Promise<string> {
-    if (!API_CONFIG.ALIBABA_API_KEY) throw new Error('Alibaba API Key missing');
-
-    const response = await fetch(API_CONFIG.ALIBABA_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_CONFIG.ALIBABA_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: API_CONFIG.ALIBABA_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7
-      })
-    });
-
-    if (!response.ok) throw new Error(`Alibaba API Error: ${response.statusText}`);
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || '';
-  }
+  // Deprecated direct calls (callOpenAI etc) have been removed as we only use Proxy now.
 }
 
 export const aiService = AIService.getInstance();

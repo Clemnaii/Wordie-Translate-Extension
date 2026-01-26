@@ -3,6 +3,8 @@ import './index.css';
 import { App } from './App';
 import { contentState } from './state';
 import { calculateTextPosition } from '../utils/dom';
+import { aiService } from '../services/ai';
+import { storage } from '../utils/storage';
 
 // ==================== 初始化 React 应用 ====================
 
@@ -101,6 +103,22 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     contentState.showPopup();
     
     sendResponse({ success: true });
+  }
+});
+
+// ==================== 初始化与预热 ====================
+
+// 1. 页面加载时，如果功能开启，则预热连接
+storage.get().then((settings) => {
+  if (settings.enableTranslation) {
+    aiService.preheat();
+  }
+});
+
+// 2. 监听设置变化，如果用户刚刚开启了功能，则预热连接
+storage.onChanged((changes) => {
+  if (changes.enableTranslation === true) {
+    aiService.preheat();
   }
 });
 
