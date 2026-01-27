@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client'
 import { useEffect, useState } from 'react'
 import './index.css'
 import { storage, Settings, ApiProvider } from '../utils/storage'
+import { PROVIDER_MODELS, DEFAULT_MODELS } from '../config/models'
 
 function Popup() {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -114,17 +115,49 @@ function Popup() {
             <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100 space-y-2.5">
               {/* Provider Select */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1 ml-0.5">AI 模型</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1 ml-0.5">AI 服务商</label>
                 <div className="relative">
                   <select 
                     value={settings.provider}
-                    onChange={(e) => updateSettings({...settings, provider: e.target.value as ApiProvider})}
+                    onChange={(e) => {
+                      const newProvider = e.target.value as ApiProvider;
+                      // Ensure model defaults correctly if not set
+                      const currentModels = settings.providerModels || {};
+                      if (!currentModels[newProvider]) {
+                        currentModels[newProvider] = DEFAULT_MODELS[newProvider];
+                      }
+                      updateSettings({...settings, provider: newProvider, providerModels: currentModels})
+                    }}
                     className="w-full text-sm border-gray-200 rounded-md shadow-sm focus:border-amber-500 focus:ring-amber-500 bg-white py-1.5 px-2 appearance-none cursor-pointer hover:border-amber-300 transition-colors"
                   >
                     <option value="gemini">Google Gemini</option>
                     <option value="openai">OpenAI</option>
                     <option value="deepseek">DeepSeek</option>
                     <option value="alibaba">Alibaba Qwen</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                    <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Model Select */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1 ml-0.5">模型选择</label>
+                <div className="relative">
+                  <select 
+                    value={settings.providerModels?.[settings.provider] || DEFAULT_MODELS[settings.provider]}
+                    onChange={(e) => {
+                      const newModels = { ...settings.providerModels, [settings.provider]: e.target.value };
+                      updateSettings({...settings, providerModels: newModels});
+                    }}
+                    className="w-full text-sm border-gray-200 rounded-md shadow-sm focus:border-amber-500 focus:ring-amber-500 bg-white py-1.5 px-2 appearance-none cursor-pointer hover:border-amber-300 transition-colors"
+                  >
+                    {PROVIDER_MODELS[settings.provider].map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.name}
+                      </option>
+                    ))}
                   </select>
                   <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
                     <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>

@@ -43,6 +43,11 @@ export default async function handler(request: any, response: any) {
   // 3. 解析请求
   const { 
     ALIBABA_API_KEY, 
+    OPENAI_API_KEY,
+    DEEPSEEK_API_KEY,
+    GEMINI_API_KEY,
+    DEFAULT_PROVIDER,
+    DEFAULT_MODEL
   } = process.env;
 
   const body = request.body || {};
@@ -56,19 +61,31 @@ export default async function handler(request: any, response: any) {
   const truncatedContext = context ? context.substring(0, 500) : '';
   const prompt = generatePrompt(text, truncatedContext);
   
-  // 默认使用 Alibaba，如果传入了 apiType 且支持则使用传入的 (兼容旧逻辑或扩展)
-  // 但根据用户要求，目前主要支持 Alibaba
-  const type = apiType || 'alibaba';
+  // 逻辑：
+  // 1. 如果 apiType (provider) 明确指定且不是 'proxy'，尝试使用该 provider
+  // 2. 否则使用环境变量中的 DEFAULT_PROVIDER
+  // 3. 最后回退到 'alibaba'
+  const type = (apiType && apiType !== 'proxy') ? apiType : (DEFAULT_PROVIDER || 'alibaba');
+  const targetModel = DEFAULT_MODEL; // 可选：如果请求体也传了 model 也可以优先使用，但目前为了安全/简化，主要依赖 env
 
-  console.log(`[${new Date().toISOString()}] 🤖 Streaming via ${type}`);
+  console.log(`[${new Date().toISOString()}] 🤖 Streaming via ${type} (Model: ${targetModel || 'default'})`);
 
   try {
     let streamGenerator: AsyncGenerator<string>;
 
     switch (type) {
+      case 'openai':
+        streamGenerator = streamOpenAICompatible(prompt, OPENAI_API_KEY, 'https://api.openai.com/v1/chat/completions', targetModel || 'gpt-4o-mini');
+        break;
+      case 'deepseek':
+        streamGenerator = streamOpenAICompatible(prompt, DEEPSEEK_API_KEY, 'https://api.deepseek.com/chat/completions', targetModel || 'deepseek-chat');
+        break;
+      case 'gemini':
+         streamGenerator = streamGemini(prompt, GEMINI_API_KEY, targetModel || 'gemini-1.5-flash');
+         break;
       case 'alibaba':
       default: // 默认回退到 Alibaba
-        streamGenerator = streamOpenAICompatible(prompt, ALIBABA_API_KEY, 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', 'qwen-flash');
+        streamGenerator = streamOpenAICompatible(prompt, ALIBABA_API_KEY, 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', targetModel || 'qwen-turbo');
         break;
     }
 
@@ -96,11 +113,11 @@ export default async function handler(request: any, response: any) {
 
 // --- Streaming Providers ---
 
-async function* streamGemini(prompt: string, apiKey?: string): AsyncGenerator<string> {
+async function* streamGemini(prompt: string, apiKey?: string, modelName: string = "gemini-1.5-flash"): AsyncGenerator<string> {
   if (!apiKey) throw new Error('Gemini API Key missing');
   
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: modelName });
 
   const result = await model.generateContentStream(prompt);
   for await (const chunk of result.stream) {

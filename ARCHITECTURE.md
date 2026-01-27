@@ -9,7 +9,10 @@
 *   **样式方案**: TailwindCSS + CSS Modules
 *   **扩展标准**: Chrome Extension Manifest V3
 *   **状态管理**: 自定义单例状态管理 (Singleton Pattern) + React Hooks
-*   **AI 服务**: 封装的 AI 接口调用层 (目前适配 OpenAI 格式接口)
+*   **通信协议**: Server-Sent Events (SSE) 实现流式传输
+*   **AI 服务**: 
+    *   **Proxy 模式**: Vercel Serverless Function (Node.js) + Alibaba Qwen
+    *   **Direct 模式**: 浏览器端直接调用 (Gemini, OpenAI, DeepSeek, Alibaba)
 
 ## 2. 目录结构
 
@@ -25,38 +28,53 @@ src/
 │   └── components/     # UI 组件
 │       ├── Indicator.tsx # 悬浮小圆点组件
 │       └── Popup.tsx     # 翻译结果弹窗组件（含核心业务逻辑）
-├── popup/              # Action Popup：点击浏览器插件图标显示的页面
-│   ├── index.html      # Popup 页面 HTML 模板
-│   ├── index.tsx       # Popup 页面 React 逻辑（功能开关）
-│   └── index.css       # Popup 页面样式
+├── popup/              # Action Popup：插件设置页面
+│   ├── index.html      # HTML 模板
+│   ├── index.tsx       # 设置页逻辑（功能开关、Key 配置）
+│   └── index.css       # 样式
 ├── services/           # 服务层
-│   └── ai.ts           # AI Service：封装 Prompt 生成、API 请求和响应解析
+│   └── ai.ts           # AI Service：核心业务层，包含双引擎路由、流式解析
 ├── utils/              # 工具库
 │   ├── dom.ts          # DOM 操作：计算选区位置、坐标转换
-│   ├── storage.ts      # 存储封装：Chrome Storage API 的 Promise 封装
+│   ├── storage.ts      # 存储封装：Chrome Storage API 封装
 │   └── text.ts         # 文本处理：输入类型检测、TTS 发音
 ├── types/              # 类型定义
 │   └── index.ts        # 全局共用类型
 └── config/             # 配置文件
     └── api.ts          # API 相关配置
+
+api/
+└── translate.ts        # Vercel Serverless Function (后端代理)
 ```
 
 ## 3. 核心架构设计
 
-### 3.1 状态管理 (Observer Pattern)
+### 3.1 双引擎 AI 路由架构 (Dual-Engine Routing)
+系统采用“默认代理 + 可选直连”的混合架构，兼顾开箱即用和灵活性：
+
+1.  **Default (Proxy Mode)**:
+    *   **场景**: 用户未配置 Key，使用默认“黑盒”服务。
+    *   **流程**: `Frontend` -> `Vercel Function` -> `Alibaba Qwen API`。
+    *   **优势**: 无需配置，开发者可控 Prompts 和模型参数。
+
+2.  **Custom (Direct Mode)**:
+    *   **场景**: 用户在设置页填入了自己的 API Key。
+    *   **流程**: `Frontend` -> `AI Provider API` (Gemini/OpenAI/DeepSeek/Alibaba)。
+    *   **优势**: 保护用户隐私（Key 不经过代理），用户掌控额度，支持更多模型。
+
+### 3.2 流式响应与解析 (Streaming & Parsing)
+为了解决“大段翻译等待时间过长”的问题，全链路实现了流式传输：
+
+1.  **后端流式**: Vercel Function 使用 `text/event-stream` 响应头，将 AI 的 Chunk 实时转发给前端。
+2.  **前端解析**: `services/ai.ts` 中的 `parsePartialResponse` 实现了**增量 JSON 解析**。
+    *   AI 被 Prompt 要求返回 JSON 格式。
+    *   在流式传输过程中，JSON 并不完整。
+    *   前端使用正则表达式从不完整的字符串中提取已生成的字段 (`translation`, `coreLogic` 等)，实时更新 UI。
+
+### 3.3 状态管理 (Observer Pattern)
 项目在 `src/content/state.ts` 中实现了一个轻量级的单例状态管理器 `ContentState`。
 *   **职责**: 维护当前的 `SelectionInfo`（文本、位置、上下文）、`isPopupVisible`、`isIndicatorVisible` 等状态。
 *   **机制**: `App.tsx` 订阅该状态的变化，实现数据驱动视图。这避免了 Content Script 中复杂的 DOM 操作耦合。
-
-### 3.2 业务流程
-1.  **用户交互**: 用户在网页选中文本 -> `content/index.tsx` 捕获 `mouseup`/`keyup` 事件。
-2.  **状态更新**: 计算选区坐标 -> 更新 `ContentState` -> 显示 `Indicator`（小圆点）。
-3.  **触发翻译**: 用户**悬停**在小圆点上 -> `Indicator` 触发 `showPopup` -> 隐藏圆点，显示 `Popup`。
-4.  **AI 分析**: `Popup` 组件挂载 -> 调用 `aiService.analyzeText` -> 异步获取结果并渲染。
-
-### 3.3 性能优化
-*   **拖拽优化**: `Popup` 的拖拽逻辑使用了 `useRef` 和直接 DOM 操作 (`element.style.left/top`)，完全绕过 React 的 Render Cycle，确保 60fps 的流畅拖拽体验。
-*   **按需渲染**: 通过 `inputType` 检测（单词 vs 句子），条件渲染不同的 UI 布局，减少无效 DOM 节点。
 
 ## 4. 目前已实现功能
 
@@ -77,12 +95,4 @@ src/
 
 ### 4.3 现代化 UI
 *   **视觉风格**: 采用极简白底设计，配合阴影和磨砂效果，呈现高级感。
-*   **交互细节**:
-    *   小圆点带有呼吸脉冲动画。
-    *   弹窗支持自由拖拽。
-    *   错误状态友好提示。
-
-## 5. 待开发/扩展建议
-*   **PDF 阅读支持**: 适配 PDF Viewer 的 DOM 结构。
-*   **生词本**: 集成后端或本地存储，保存查询记录。
-*   **多语言支持**: 目前专注于英译中，可扩展配置目标语言。
+*   **交互细节**: 小圆点带有呼吸脉冲动画，弹窗支持自由拖拽。

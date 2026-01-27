@@ -1,6 +1,7 @@
 import { API_CONFIG, AIResponse } from '../config/api';
 import { storage, ApiProvider } from '../utils/storage';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { DEFAULT_MODELS } from '../config/models';
 
 export interface AIAnalysisResult extends AIResponse {
   // 扩展接口以备将来需要
@@ -109,7 +110,6 @@ class AIService {
     context: string = '', 
     onUpdate: (result: Partial<AIAnalysisResult>) => void
   ): Promise<void> {
-    const { API_TYPE } = API_CONFIG;
     let accumulatedText = '';
 
     try {
@@ -123,6 +123,7 @@ class AIService {
           context, 
           settings.provider, 
           settings.customKeys[settings.provider]!, 
+          settings.providerModels?.[settings.provider],
           (chunk) => {
             accumulatedText += chunk;
             const partialResult = this.parsePartialResponse(accumulatedText, text);
@@ -130,8 +131,9 @@ class AIService {
           }
         );
       } else {
-        // Use Proxy
-        await this.callProxyStream(text, context, API_TYPE, (chunk) => {
+        // Use Proxy (Let the backend decide based on its environment variables)
+        // We pass 'proxy' or undefined as provider so the backend knows to use its default
+        await this.callProxyStream(text, context, undefined, (chunk) => {
           accumulatedText += chunk;
           const partialResult = this.parsePartialResponse(accumulatedText, text);
           onUpdate(partialResult);
@@ -148,13 +150,16 @@ class AIService {
     context: string, 
     provider: ApiProvider, 
     apiKey: string,
+    modelName: string | undefined,
     onChunk: (chunk: string) => void
   ): Promise<void> {
     const prompt = this.generatePrompt(text, context);
+    // Use provided model or fallback to default
+    const targetModel = modelName || DEFAULT_MODELS[provider];
 
     if (provider === 'gemini') {
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: targetModel });
       const result = await model.generateContentStream(prompt);
       
       for await (const chunk of result.stream) {
@@ -164,20 +169,16 @@ class AIService {
     } else {
       // OpenAI compatible providers (OpenAI, DeepSeek, Alibaba, etc.)
       let url = '';
-      let modelName = '';
       
       switch (provider) {
         case 'openai':
           url = 'https://api.openai.com/v1/chat/completions';
-          modelName = 'gpt-3.5-turbo';
           break;
         case 'deepseek':
           url = 'https://api.deepseek.com/chat/completions';
-          modelName = 'deepseek-chat';
           break;
         case 'alibaba':
           url = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
-          modelName = 'qwen-turbo';
           break;
         default:
           throw new Error(`Unsupported provider for direct call: ${provider}`);
@@ -190,7 +191,7 @@ class AIService {
           'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: modelName,
+          model: targetModel,
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.7,
           stream: true
@@ -341,7 +342,7 @@ class AIService {
     }
   }
 
-  private async callProxyStream(text: string, context: string, apiType: string, onChunk: (chunk: string) => void): Promise<void> {
+  private async callProxyStream(text: string, context: string, apiType: string | undefined, onChunk: (chunk: string) => void): Promise<void> {
     try {
       const response = await fetch(API_CONFIG.API_PROXY_URL, {
         method: 'POST',
