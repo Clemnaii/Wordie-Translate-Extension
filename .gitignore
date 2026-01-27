@@ -50,3 +50,7 @@ coverage/
 # Misc
 *.bak
 *.backup
+futureTasks.md
+ARCHITECTURE.md
+.vercel
+.env*.local

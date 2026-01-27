@@ -31,13 +31,21 @@ export const Popup: React.FC<PopupProps> = ({ selection }) => {
       setLoading(true);
       setError(null);
       try {
-        const data = await aiService.analyzeText(selection.text, selection.context);
-        if (data) {
-          setResult(data);
-        } else {
-          setError('API returned no data');
-        }
+        await aiService.analyzeTextStream(selection.text, selection.context, (partialResult) => {
+          setLoading(false); // Show content as soon as first chunk arrives
+          setResult(prev => {
+            const base = prev || {
+              correctedText: selection.text,
+              translation: '',
+              phonetic: undefined,
+              contextMeaning: undefined,
+              coreLogic: null
+            };
+            return { ...base, ...partialResult } as AIAnalysisResult;
+          });
+        });
       } catch (err) {
+        console.error(err);
         setError('Failed to fetch data');
       } finally {
         setLoading(false);

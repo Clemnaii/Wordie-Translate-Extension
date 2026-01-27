@@ -1,4 +1,7 @@
 import { API_CONFIG, AIResponse } from '../config/api';
+import { storage, ApiProvider } from '../utils/storage';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { DEFAULT_MODELS } from '../config/models';
 
 export interface AIAnalysisResult extends AIResponse {
   // 扩展接口以备将来需要
@@ -17,49 +20,49 @@ class AIService {
   }
 
   private generatePrompt(text: string, context: string): string {
-    return `你是一个精通英语语义学和认知语言学的专家。你的任务是分析用户输入的文本（词语、短语或句子），并按以下逻辑返回 JSON 格式的数据。
+        return `你是一个精通英语语义学和认知语言学的专家。你的任务是分析用户输入的文本（词语、短语或句子），并按以下逻辑返回 JSON 格式的数据。
 
-Processing Logic:
+    Processing Logic:
 
-判定类型：判断输入是"词语/短语"还是"完整句子"。
+    判定类型：判断输入是"词语/短语"还是"完整句子"。
 
-通用要求：
-- 分析用户选中的文本在上下文中的具体意思，考虑语境、修辞等因素
+    通用要求：
+    - 分析用户选中的文本在上下文中的具体意思，考虑语境、修辞等因素
 
-如果是词语/短语：
-- correctedText: 【重要】分析用户选中的文本"${text}"，如果它是不完整的单词（如"messag"应为"message"）或有拼写错误，请提供完整的正确单词；如果已经是正确的完整单词，则与输入保持一致
-- phonetic: 提供该单词的标准音标（如 /ˈæpəl/），使用国际音标IPA格式
-- contextMeaning: 基于上下文"${context ? context.substring(0, 200) : ''}"，分析该词在此处的具体意思，用"[文中意思] 词性.具体含义"的格式描述
-- translation: 分词性输出主要中文意思（例如：n. 苹果; adj. 苹果似的）
-- coreLogic: 引用权威英语词典Oxford中关于该词最本源、最核心的英文定义，然后换行两次，再输出该定义的中文翻译（注意：coreLogic 不包含词性信息）
+    如果是词语/短语：
+    - correctedText: 【重要】分析用户选中的文本"${text}"，如果它是不完整的单词（如"messag"应为"message"）或有拼写错误，请提供完整的正确单词；如果已经是正确的完整单词，则与输入保持一致
+    - phonetic: 提供该单词的标准音标（如 /ˈæpəl/），使用国际音标IPA格式
+    - contextMeaning: 基于上下文"${context ? context.substring(0, 200) : ''}"，分析该词在此处的具体意思，用"[文中意思] 词性.具体含义"的格式描述
+    - translation: 分词性输出主要中文意思（例如：n. 苹果; adj. 苹果似的）
+    - coreLogic: 引用权威英语词典Oxford中关于该词最本源、最核心的英文定义，然后换行两次，再输出该定义的中文翻译（注意：coreLogic 不包含词性信息）
 
-如果是完整句子：
-- correctedText: 【重要】如果句子有语法错误或不完整，请提供修正后的完整句子；如果已经是正确的完整句子，则与输入保持一致
-- phonetic: 设为 null 或空字符串
-- contextMeaning: 设为 null 或空字符串（句子本身就是上下文）
-- translation: 直接提供整句的中文直译
-- coreLogic: 设为 null
+    如果是完整句子：
+    - correctedText: 【重要】如果句子有语法错误或不完整，请提供修正后的完整句子；如果已经是正确的完整句子，则与输入保持一致
+    - phonetic: 设为 null 或空字符串
+    - contextMeaning: 设为 null 或空字符串（句子本身就是上下文）
+    - translation: 直接提供整句的中文直译
+    - coreLogic: 设为 null
 
-请分析文本："${text}"
+    请分析文本："${text}"
 
-${context ? `上下文：${context.substring(0, 200)}` : ''}
+    ${context ? `上下文：${context.substring(0, 200)}` : ''}
 
-请用 JSON 格式返回（确保是有效的 JSON）：
-{
-  "correctedText": "修正后的完整正确文本",
-  "phonetic": "/ˈæpəl/",
-  "contextMeaning": "[文中意思] n.苹果（此处指水果）",
-  "translation": "中文翻译（词语需包含词性）",
-  "coreLogic": "英文定义\n\n中文解释"
-}
-或
-{
-  "correctedText": "修正后的完整正确句子",
-  "phonetic": null,
-  "contextMeaning": null,
-  "translation": "中文翻译",
-  "coreLogic": null
-}`;
+    请用 JSON 格式返回（确保是有效的 JSON）：
+    {
+      "correctedText": "修正后的完整正确文本",
+      "phonetic": "/ˈæpəl/",
+      "contextMeaning": "[文中意思] n.苹果（此处指水果）",
+      "translation": "中文翻译（词语需包含词性）",
+      "coreLogic": "英文定义\n\n中文解释"
+    }
+    或
+    {
+      "correctedText": "修正后的完整正确句子",
+      "phonetic": null,
+      "contextMeaning": null,
+      "translation": "中文翻译",
+      "coreLogic": null
+    }`;
   }
 
   private parseResponse(content: string, originalText: string): AIAnalysisResult {
@@ -93,117 +96,314 @@ ${context ? `上下文：${context.substring(0, 200)}` : ''}
   }
 
   public async analyzeText(text: string, context: string = ''): Promise<AIAnalysisResult | null> {
-    const prompt = this.generatePrompt(text, context);
-    const { API_TYPE } = API_CONFIG;
+    // Legacy method wrapper (waits for completion)
+    return new Promise((resolve) => {
+      let finalResult: AIAnalysisResult | null = null;
+      this.analyzeTextStream(text, context, (result) => {
+        finalResult = result as AIAnalysisResult;
+      }).then(() => resolve(finalResult));
+    });
+  }
+
+  public async analyzeTextStream(
+    text: string, 
+    context: string = '', 
+    onUpdate: (result: Partial<AIAnalysisResult>) => void
+  ): Promise<void> {
+    let accumulatedText = '';
 
     try {
-      let content = '';
-
-      switch (API_TYPE) {
-        case 'gemini':
-          content = await this.callGemini(prompt);
-          break;
-        case 'openai':
-          content = await this.callOpenAI(prompt);
-          break;
-        case 'deepseek':
-          content = await this.callDeepSeek(prompt);
-          break;
-        case 'alibaba':
-          content = await this.callAlibaba(prompt);
-          break;
-        default:
-          console.warn(`Unsupported API type: ${API_TYPE}`);
-          return null;
+      // Check settings for custom key
+      const settings = await storage.get();
+      
+      if (settings.useCustomKey && settings.customKeys[settings.provider]) {
+        // Use direct client-side call
+        await this.callDirectStream(
+          text, 
+          context, 
+          settings.provider, 
+          settings.customKeys[settings.provider]!, 
+          settings.providerModels?.[settings.provider],
+          (chunk) => {
+            accumulatedText += chunk;
+            const partialResult = this.parsePartialResponse(accumulatedText, text);
+            onUpdate(partialResult);
+          }
+        );
+      } else {
+        // Use Proxy (Let the backend decide based on its environment variables)
+        // We pass 'proxy' or undefined as provider so the backend knows to use its default
+        await this.callProxyStream(text, context, undefined, (chunk) => {
+          accumulatedText += chunk;
+          const partialResult = this.parsePartialResponse(accumulatedText, text);
+          onUpdate(partialResult);
+        });
       }
-
-      return this.parseResponse(content, text);
-
     } catch (error) {
-      console.error('AI Service Error:', error);
-      return null;
+      console.error('AI Stream Analysis Failed:', error);
+      throw error;
     }
   }
 
-  private async callGemini(prompt: string): Promise<string> {
-    if (!API_CONFIG.GEMINI_API_KEY) throw new Error('Gemini API Key missing');
+  private async callDirectStream(
+    text: string, 
+    context: string, 
+    provider: ApiProvider, 
+    apiKey: string,
+    modelName: string | undefined,
+    onChunk: (chunk: string) => void
+  ): Promise<void> {
+    const prompt = this.generatePrompt(text, context);
+    // Use provided model or fallback to default
+    const targetModel = modelName || DEFAULT_MODELS[provider];
+
+    if (provider === 'gemini') {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: targetModel });
+      const result = await model.generateContentStream(prompt);
+      
+      for await (const chunk of result.stream) {
+        const chunkText = chunk.text();
+        if (chunkText) onChunk(chunkText);
+      }
+    } else {
+      // OpenAI compatible providers (OpenAI, DeepSeek, Alibaba, etc.)
+      let url = '';
+      
+      switch (provider) {
+        case 'openai':
+          url = 'https://api.openai.com/v1/chat/completions';
+          break;
+        case 'deepseek':
+          url = 'https://api.deepseek.com/chat/completions';
+          break;
+        case 'alibaba':
+          url = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+          break;
+        default:
+          throw new Error(`Unsupported provider for direct call: ${provider}`);
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: targetModel,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.7,
+          stream: true
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`${provider} API Error: ${response.status} ${errText}`);
+      }
+
+      if (!response.body) throw new Error('No response body');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed === 'data: [DONE]') continue;
+          
+          if (trimmed.startsWith('data: ')) {
+            try {
+              const dataStr = trimmed.slice(6);
+              const data = JSON.parse(dataStr);
+              const content = data.choices?.[0]?.delta?.content;
+              if (content) onChunk(content);
+            } catch (e) {
+              console.warn('Direct Stream Parse Error', e);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private parsePartialResponse(content: string, originalText: string): Partial<AIAnalysisResult> {
+    // 1. 尝试完整解析 (如果是合法的 JSON)
+    try {
+      // 查找第一个 { 和 最后一个 } 之间的内容
+      const firstBrace = content.indexOf('{');
+      const lastBrace = content.lastIndexOf('}');
+      
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        const jsonStr = content.substring(firstBrace, lastBrace + 1);
+        const result = JSON.parse(jsonStr);
+        return this.normalizeResult(result, originalText);
+      }
+    } catch (e) {
+      // JSON 不完整，忽略错误，继续下面的正则提取
+    }
+
+    // 2. 正则提取字段 (用于流式显示)
+    // 注意：这里的正则比较简单，处理不了复杂的嵌套或转义，但对于流式展示足够了
+    const extract = (key: string) => {
+      // 匹配 "key": "value... (直到遇到下一个引号或字符串结尾)
+      // 注意：这里假设 value 中没有未转义的引号。如果 AI 输出包含转义引号，这个正则可能会截断。
+      // 但为了简单起见，且通常 key 顺序固定，我们尽量匹配到下一个字段的 key 前
+      
+      // 更加鲁棒的策略：
+      // 找到 "key": 
+      // 然后找到其后的第一个 "
+      // 然后读取直到下一个 " (忽略 \")
+      
+      const keyPattern = `"${key}"\\s*:\\s*"`;
+      const keyMatch = content.match(new RegExp(keyPattern));
+      
+      if (!keyMatch || keyMatch.index === undefined) return undefined;
+      
+      const valueStartIndex = keyMatch.index + keyMatch[0].length;
+      let valueEndIndex = valueStartIndex;
+      let isEscaped = false;
+      
+      // 手动扫描字符串直到结束引号
+      for (let i = valueStartIndex; i < content.length; i++) {
+        const char = content[i];
+        if (isEscaped) {
+          isEscaped = false;
+          continue;
+        }
+        if (char === '\\') {
+          isEscaped = true;
+          continue;
+        }
+        if (char === '"') {
+          valueEndIndex = i;
+          break; // Found the end quote
+        }
+        // If we reach the end of content without a quote, it means the value is still streaming
+        if (i === content.length - 1) {
+          valueEndIndex = content.length;
+        }
+      }
+      
+      return content.substring(valueStartIndex, valueEndIndex);
+    };
+
+    return {
+      correctedText: extract('correctedText') || originalText,
+      phonetic: extract('phonetic'),
+      contextMeaning: extract('contextMeaning'),
+      translation: extract('translation'),
+      coreLogic: extract('coreLogic') // coreLogic 通常在最后，可能还未开始
+    };
+  }
+
+  private normalizeResult(result: any, originalText: string): AIAnalysisResult {
+    const coreLogic = result.coreLogic ?? result.core_logic ?? null;
+    const normalizedCoreLogic = (coreLogic === '' || coreLogic === 'null') ? null : coreLogic;
     
-    const apiUrl = `${API_CONFIG.GEMINI_API_URL}?key=${API_CONFIG.GEMINI_API_KEY}`;
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
-      })
-    });
-
-    if (!response.ok) throw new Error(`Gemini API Error: ${response.statusText}`);
-    const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return {
+      correctedText: result.correctedText || originalText,
+      phonetic: result.phonetic || undefined,
+      contextMeaning: result.contextMeaning || undefined,
+      translation: result.translation || '翻译获取失败',
+      coreLogic: normalizedCoreLogic
+    };
   }
 
-  private async callOpenAI(prompt: string): Promise<string> {
-    if (!API_CONFIG.OPENAI_API_KEY) throw new Error('OpenAI API Key missing');
+  // Old parseResponse is deprecated but kept/refactored inside normalizeResult if needed
+  // private parseResponse... (Removed)
 
-    const response = await fetch(API_CONFIG.OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_CONFIG.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7
-      })
-    });
-
-    if (!response.ok) throw new Error(`OpenAI API Error: ${response.statusText}`);
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || '';
+  /**
+   * 预热连接 (Warm-up)
+   * 在功能开启或页面加载时调用，建立 TCP/TLS 连接池
+   */
+  public async preheat(): Promise<void> {
+    try {
+      // 发送一个轻量级的 GET 请求到后端
+      // 浏览器的连接池机制会自动复用这个连接用于后续的 POST 请求
+      await fetch(API_CONFIG.API_PROXY_URL, {
+        method: 'GET',
+        // 不发送 body，且通常不发送复杂 Header 以避免 Preflight (如果后端允许简单请求)
+        // 但这里我们的后端配置了 CORS，且是同源/代理，主要目的是建立连接
+      });
+      console.log('🔥 Connection preheated');
+    } catch (e) {
+      // 预热失败不影响主流程，仅记录日志
+      console.debug('Connection preheat failed (non-critical):', e);
+    }
   }
 
-  private async callDeepSeek(prompt: string): Promise<string> {
-    if (!API_CONFIG.DEEPSEEK_API_KEY) throw new Error('DeepSeek API Key missing');
+  private async callProxyStream(text: string, context: string, apiType: string | undefined, onChunk: (chunk: string) => void): Promise<void> {
+    try {
+      const response = await fetch(API_CONFIG.API_PROXY_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text,
+          context,
+          apiType
+        })
+      });
 
-    const response = await fetch(API_CONFIG.DEEPSEEK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_CONFIG.DEEPSEEK_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: API_CONFIG.DEEPSEEK_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7
-      })
-    });
+      if (!response.ok) {
+        // Try to read error body
+        const errorText = await response.text().catch(() => '');
+        throw new Error(`Proxy API Error: ${response.statusText} ${errorText}`);
+      }
+      
+      if (!response.body) throw new Error('No response body');
 
-    if (!response.ok) throw new Error(`DeepSeek API Error: ${response.statusText}`);
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || '';
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; 
+        
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed === 'data: [DONE]') continue;
+          
+          if (trimmed.startsWith('data: ')) {
+            try {
+              // Server sends data: "chunk" (JSON stringified string)
+              // We need to JSON.parse the data payload to get the actual string
+              const dataStr = trimmed.slice(6);
+              if (dataStr === '[DONE]') return;
+              
+              const textChunk = JSON.parse(dataStr);
+              onChunk(textChunk);
+            } catch (e) {
+              console.warn('SSE Parse Error', e, trimmed);
+            }
+          } else if (trimmed.startsWith('event: error')) {
+             // Handle error event if needed, usually followed by data: error msg
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Call Proxy Stream Failed:', error);
+      throw error;
+    }
   }
 
-  private async callAlibaba(prompt: string): Promise<string> {
-    if (!API_CONFIG.ALIBABA_API_KEY) throw new Error('Alibaba API Key missing');
-
-    const response = await fetch(API_CONFIG.ALIBABA_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_CONFIG.ALIBABA_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: API_CONFIG.ALIBABA_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7
-      })
-    });
-
-    if (!response.ok) throw new Error(`Alibaba API Error: ${response.statusText}`);
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || '';
-  }
+  // Deprecated direct calls (callOpenAI etc) have been removed as we only use Proxy now.
 }
 
 export const aiService = AIService.getInstance();
