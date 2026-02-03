@@ -23,7 +23,7 @@ export const API_CONFIG = {
 
   // Backend Proxy URL (Prioritize environment variable, otherwise default to Vercel server)
   // Use 127.0.0.1 instead of localhost to avoid DNS resolution latency
-  API_PROXY_URL: import.meta.env.VITE_API_PROXY_URL || 'https://wordie-translate-extension-git-feature-e3fbdb-clemnas-projects.vercel.app/api/translate',
+  API_PROXY_URL: import.meta.env.VITE_API_PROXY_URL,
 };
 
 // Re-export types for backward compatibility
